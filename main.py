@@ -3,6 +3,7 @@ from datetime import datetime, date, timedelta
 from typing import List, Optional
 
 from fastapi import FastAPI, Depends, HTTPException, Security
+from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -13,6 +14,18 @@ from dotenv import load_dotenv
 load_dotenv()
 API_SECRET_KEY = os.getenv("API_SECRET_KEY", "tu-clave-secreta-de-prueba") 
 app = FastAPI()
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """Raíz mínima: devuelve OK y la ruta a la documentación para facilitar probes."""
+    return {"status": "ok", "message": "Service running", "docs": "/docs"}
+
+
+@app.get("/health", include_in_schema=False)
+async def health():
+    """Health check rápido que devuelve 200 OK en texto plano."""
+    return PlainTextResponse("OK", status_code=200)
 
 # Configuración de Seguridad para el Bearer Token
 security = HTTPBearer()
