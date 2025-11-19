@@ -5,20 +5,35 @@ from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, Security
 from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.middleware.cors import CORSMiddleware # <-- NUEVA IMPORTACIÓN DE CORS
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-
-
 # Cargar variables de entorno (como API_SECRET_KEY) desde un archivo .env
 load_dotenv()
-API_SECRET_KEY = os.getenv("API_SECRET_KEY", "tu-clave-secreta-de-prueba") 
+API_SECRET_KEY = os.getenv("API_SECRET_KEY", "UaLY_U0gkvXdsYjYof2pa1vEMnMgM") 
 app = FastAPI()
 
+# --- Configuración de CORS ---
+# Esto es CRÍTICO para que el frontend pueda hacer llamadas fetch al microservicio.
+origins = [
+    # En desarrollo/prueba, se permite cualquier origen ("*").
+    # En producción, se debería restringir a la URL exacta del portal del cliente (ej: "https://portal.midominio.com").
+    "*"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins, 
+    allow_credentials=True, # Permitir credenciales (como el Bearer Token)
+    allow_methods=["*"],    # Permitir todos los métodos (GET, POST)
+    allow_headers=["*"],    # Permitir todos los headers (incluyendo el de Authorization)
+)
+# --- Fin de Configuración de CORS ---
 
 @app.get("/", include_in_schema=False)
 async def root():
-    """Raíz mínima: devuelve OK y la ruta a la documentación para facilitar probes."""
+    """Raíz mínima: devuelve OK y la ruta a la documentación para facilitar pruebas."""
     return {"status": "ok", "message": "Service running", "docs": "/docs"}
 
 
@@ -54,7 +69,7 @@ class BillingAction(BaseModel):
 def verify_api_key(credentials: HTTPAuthorizationCredentials = Security(security)):
     """Verifica que el Bearer Token enviado en el encabezado sea correcto."""
     
-    # La clave real debe venir de una variable de entorno para producción
+    # Compara el token enviado con la clave secreta configurada.
     if credentials.scheme != "Bearer" or credentials.credentials != API_SECRET_KEY:
         raise HTTPException(
             status_code=403,
@@ -68,15 +83,17 @@ async def get_subscription_status(user_id: str):
     """Permite al portal del cliente consultar el estado de su suscripción."""
     
     # --- SIMULACIÓN DE CONSULTA A BASE DE DATOS (REEMPLAZAR) ---
-    # En una implementación real, aquí se usaría un ORM como SQLAlchemy o un conector 
-    # puro para consultar la tabla 'subscriptions' en Supabase/Neon.
+    # En una implementación real, aquí se usaría un ORM/conector para consultar la tabla 'subscriptions'.
+    
+    # Fecha de hoy simulada para la demostración
+    current_time = datetime.now()
     
     # Ejemplo de datos de simulación
     if user_id == "juan-perez-123":
         return {
             "plan": "pro",
             "status": "active",
-            "next_billing_at": (datetime.now() + timedelta(days=20)).isoformat()
+            "next_billing_at": (current_time + timedelta(days=20)).isoformat()
         }
     
     # Simulación de un usuario en periodo de prueba
@@ -84,7 +101,7 @@ async def get_subscription_status(user_id: str):
          return {
             "plan": "basic",
             "status": "trial",
-            "next_billing_at": (datetime.now() + timedelta(days=5)).isoformat()
+            "next_billing_at": (current_time + timedelta(days=5)).isoformat() # Usamos next_billing_at para indicar fin de prueba
         }
 
     # Si el usuario no existe en la simulación
@@ -128,7 +145,6 @@ async def calculate_billing_actions(subscriptions: List[Subscription]):
                 
         elif sub.status == 'past_due':
             # Caso 4 (Opcional): Manejo de pago fallido (Dunning)
-            # Podrías añadir lógica aquí para reintentos basados en last_payment_attempt
             action = 'send_dunning_email' 
             
         # Si se determinó una acción, la añadimos a la lista de salida

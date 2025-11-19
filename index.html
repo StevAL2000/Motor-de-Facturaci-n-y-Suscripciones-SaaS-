@@ -1,0 +1,278 @@
+
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal del Cliente - Dashboard</title>
+    <!-- Carga de Tailwind CSS para estilos modernos y responsivos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Configuración de fuente y estilo base */
+        :root {
+            --primary-color: #3b82f6; /* Blue 500 */
+            --secondary-color: #10b981; /* Emerald 500 */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .card {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-start justify-center p-4 sm:p-6">
+
+    <div id="app" class="w-full max-w-2xl bg-white rounded-xl card p-6 sm:p-8 mt-10">
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-3">Portal de Cliente Seguro</h1>
+        
+        <!-- Vista de Login (cuando no hay user_id en localStorage) -->
+        <div id="loginView" class="hidden">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Iniciar Sesión</h2>
+            <div class="mb-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <label for="loginUserIdInput" class="block text-sm font-medium text-blue-700 mb-2">
+                    Ingresa tu User ID (ID de Cliente)
+                </label>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <input type="text" id="loginUserIdInput" 
+                           value="juan-perez-123" 
+                           placeholder="Ej: juan-perez-123"
+                           class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-800">
+                    <button id="loginButton"
+                            class="px-6 py-3 bg-primary-color hover:bg-blue-700 text-white font-semibold rounded-lg transition duration-150 ease-in-out shadow-md">
+                        Acceder al Dashboard
+                    </button>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">Prueba con IDs simulados: `juan-perez-123` (activo) o `maria-lopez-456` (trial).</p>
+            </div>
+        </div>
+
+        <!-- Vista del Dashboard (cuando hay user_id en localStorage) -->
+        <div id="dashboardView" class="hidden">
+            <div class="flex justify-between items-center mb-4 pb-2 border-b">
+                <h2 class="text-2xl font-bold text-gray-800">Dashboard de Suscripción</h2>
+                <button id="logoutButton"
+                        class="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-lg transition duration-150 ease-in-out">
+                    Cerrar Sesión
+                </button>
+            </div>
+
+            <!-- Contenedor de Resultado (Estado de la Suscripción) -->
+            <div id="resultContainer">
+                <div id="loadingIndicator" class="text-center text-blue-600 font-semibold p-8">
+                    Cargando...
+                </div>
+                <div id="statusCard" class="hidden p-6 border-2 border-gray-100 rounded-xl">
+                    <p class="mb-4 text-sm text-gray-600">ID de Usuario Logueado: <span id="loggedUserId" class="font-mono text-gray-900 font-bold"></span></p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <p class="font-medium text-gray-500">Plan Actual:</p>
+                            <p id="planDisplay" class="text-lg font-bold text-gray-900"></p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <p class="font-medium text-gray-500">Estado:</p>
+                            <p id="statusDisplay" class="text-lg font-bold text-gray-900"></p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg md:col-span-2">
+                            <p class="font-medium text-gray-500">Próximo Cobro/Fin de Prueba:</p>
+                            <p id="billingDisplay" class="text-lg font-bold text-gray-900"></p>
+                        </div>
+                    </div>
+
+                    <!-- Botón de Acción -->
+                    <button id="actionButton"
+                            class="w-full mt-6 py-3 font-semibold text-white rounded-lg transition duration-150 ease-in-out shadow-md"
+                            style="background-color: var(--secondary-color);">
+                        <span id="actionText">Mejorar Plan (Upgrade)</span>
+                    </button>
+                </div>
+                
+                <div id="errorDisplay" class="hidden p-4 bg-red-100 text-red-700 rounded-lg mt-4">
+                    <!-- Los mensajes de error se inyectarán aquí -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONSTANTES DE LA API (Adaptadas para ejecución local) ---
+        // ¡IMPORTANTE! Si tu Microservicio está en Render, cambia esto a la URL de Render.
+        // Si lo estás corriendo con uvicorn, déjalo en http://127.0.0.1:8000
+        const API_URL = "http://127.0.0.1:8000"; 
+        const API_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyNDc2NTcyYS01M2Q0LTQ5NzAtOGQ4OC0xMDRkNGVkMjI4ODUiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzYzNDM0NTQzLCJleHAiOjE3NjU5NDc2MDB9.0SyLTdbRm0OCMUaLYJ_U0gkvXdsYjYof2pa1vEMnMgM";
+        const STORAGE_KEY = 'saas_user_id';
+
+        // --- REFERENCIAS DOM ---
+        const loginView = document.getElementById('loginView');
+        const dashboardView = document.getElementById('dashboardView');
+        const loginUserIdInput = document.getElementById('loginUserIdInput');
+        const loginButton = document.getElementById('loginButton');
+        const logoutButton = document.getElementById('logoutButton');
+        
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const statusCard = document.getElementById('statusCard');
+        const errorDisplay = document.getElementById('errorDisplay');
+        const loggedUserIdDisplay = document.getElementById('loggedUserId');
+
+        const planDisplay = document.getElementById('planDisplay');
+        const statusDisplay = document.getElementById('statusDisplay');
+        const billingDisplay = document.getElementById('billingDisplay');
+        const actionButton = document.getElementById('actionButton');
+        const actionText = document.getElementById('actionText');
+
+        // --- FUNCIONES DE UTILIDAD ---
+
+        // Función auxiliar para formatear fechas
+        const formatDate = (isoString) => {
+            if (!isoString) return 'N/A';
+            try {
+                const date = new Date(isoString);
+                // Opciones para formato en español (ignora la hora para el portal)
+                const options = { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' };
+                return date.toLocaleDateString('es-ES', options);
+            } catch (e) {
+                console.error("Error al formatear fecha:", e);
+                return 'Fecha Inválida';
+            }
+        };
+
+        // Función para mostrar mensajes de error
+        const displayError = (message) => {
+            statusCard.classList.add('hidden');
+            loadingIndicator.classList.add('hidden');
+            errorDisplay.innerHTML = `<p class="font-bold">Error:</p><p>${message}</p>`;
+            errorDisplay.classList.remove('hidden');
+        };
+
+        // Función para cambiar de vista (Login/Dashboard)
+        const renderView = () => {
+            const userId = localStorage.getItem(STORAGE_KEY);
+            if (userId) {
+                loginView.classList.add('hidden');
+                dashboardView.classList.remove('hidden');
+                loggedUserIdDisplay.textContent = userId;
+                // Iniciar la consulta al Microservicio
+                lookupSubscription(userId);
+            } else {
+                dashboardView.classList.add('hidden');
+                loginView.classList.remove('hidden');
+            }
+        };
+
+        // --- LÓGICA DE AUTH/LOCAL STORAGE ---
+
+        const handleLogin = () => {
+            const userId = loginUserIdInput.value.trim();
+            if (!userId) {
+                // Se usa console.error en lugar de alert() para seguir las buenas prácticas
+                console.error("Por favor, ingresa un User ID."); 
+                return;
+            }
+            // 1. Guardar el ID en localStorage (simulando sesión)
+            localStorage.setItem(STORAGE_KEY, userId);
+            // 2. Renderizar la vista del dashboard
+            renderView();
+        };
+
+        const handleLogout = () => {
+            // 1. Limpiar el ID de localStorage
+            localStorage.removeItem(STORAGE_KEY);
+            // 2. Renderizar la vista de login
+            renderView();
+            // 3. Limpiar la vista del dashboard
+            statusCard.classList.add('hidden');
+            errorDisplay.classList.add('hidden');
+            loadingIndicator.classList.add('hidden');
+        };
+        
+        // --- FUNCIÓN PRINCIPAL DE CONSULTA ---
+        const lookupSubscription = async (userId) => {
+            
+            // 1. Limpiar estado y mostrar carga
+            statusCard.classList.add('hidden');
+            errorDisplay.classList.add('hidden');
+            loadingIndicator.classList.remove('hidden');
+            
+            const endpoint = `${API_URL}/subscription-status/${userId}`;
+
+            try {
+                // 2. Realizar la petición con el Bearer Token
+                const response = await fetch(endpoint, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${API_TOKEN}`, // Incluye el Bearer Token para seguridad
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                
+                // 3. Manejo de errores HTTP (ej: 404 No encontrado, 403 No autorizado)
+                if (!response.ok) {
+                    const message = data.detail || `Error en el Microservicio: Código ${response.status}.`;
+                    return displayError(message);
+                }
+
+                // 4. Mostrar datos
+                updateDisplay(data);
+
+            } catch (error) {
+                console.error("Error en la consulta al Microservicio:", error);
+                // Este mensaje es el que apareció antes (Failed to fetch), por eso la corrección de CORS era vital.
+                displayError(`No se pudo conectar con la API en ${API_URL}. Revisa la consola para más detalles.`);
+            } finally {
+                // 5. Ocultar el indicador de carga
+                loadingIndicator.classList.add('hidden');
+            }
+        };
+        
+        // Función para actualizar la interfaz con los datos recibidos
+        const updateDisplay = (data) => {
+            const status = data.status.toUpperCase();
+            const isTrial = status === 'TRIAL';
+
+            // Actualizar la tarjeta de estado
+            planDisplay.textContent = data.plan.toUpperCase();
+            statusDisplay.textContent = status;
+            billingDisplay.textContent = formatDate(data.next_billing_at);
+            
+            // Configurar el botón de acción según el estado
+            actionButton.classList.remove('bg-red-500', 'bg-blue-500', 'bg-emerald-500');
+            actionButton.disabled = false;
+            
+            if (isTrial) {
+                actionText.textContent = 'Activar Ahora (Convertir a Pago)';
+                actionButton.style.backgroundColor = 'var(--primary-color)';
+            } else if (status === 'ACTIVE') {
+                actionText.textContent = 'Mejorar Plan (Upgrade)';
+                actionButton.style.backgroundColor = 'var(--secondary-color)';
+            } else if (status === 'PAST_DUE') {
+                actionText.textContent = 'Actualizar Método de Pago';
+                actionButton.style.backgroundColor = '#ef4444'; // Red 500
+            } else {
+                actionText.textContent = 'Contactar Soporte';
+                actionButton.style.backgroundColor = 'gray';
+                actionButton.disabled = true;
+            }
+            
+            // Mostrar la tarjeta y ocultar otros mensajes
+            statusCard.classList.remove('hidden');
+        };
+
+        // --- EVENT LISTENERS E INICIO ---
+        loginButton.addEventListener('click', handleLogin);
+        logoutButton.addEventListener('click', handleLogout);
+        
+        // Permite loguearse presionando Enter
+        loginUserIdInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleLogin();
+            }
+        });
+
+        // Iniciar la aplicación: revisa localStorage al cargar
+        window.onload = renderView;
+    </script>
+</body>
+</html>
