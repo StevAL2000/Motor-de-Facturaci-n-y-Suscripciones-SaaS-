@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 # Cargar variables de entorno (como API_SECRET_KEY) desde un archivo .env
 load_dotenv()
-API_SECRET_KEY = os.getenv("API_SECRET_KEY", "UaLY_U0gkvXdsYjYof2pa1vEMnMgM") 
+API_SECRET_KEY = os.getenv("API_SECRET_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyNDc2NTcyYS01M2Q0LTQ5NzAtOGQ4OC0xMDRkNGVkMjI4ODUiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzYzNDM0NTQzLCJleHAiOjE3NjU5NDc2MDB9.0SyLTdbRm0OCMUaLYJ_U0gkvXdsYjYof2pa1vEMnMgM") 
 app = FastAPI()
 
 # --- Configuración de CORS ---
